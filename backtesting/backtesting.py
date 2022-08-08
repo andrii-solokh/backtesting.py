@@ -49,6 +49,7 @@ class Strategy(metaclass=ABCMeta):
     `backtesting.backtesting.Strategy.next` to define
     your own strategy.
     """
+
     def __init__(self, broker, data, params):
         self._indicators = []
         self._broker: _Broker = broker
@@ -283,6 +284,7 @@ class _Orders(tuple):
     """
     TODO: remove this class. Only for deprecation.
     """
+
     def cancel(self):
         """Cancel all non-contingent (i.e. SL/TP) orders."""
         for order in self:
@@ -310,6 +312,7 @@ class Position:
         if self.position:
             ...  # we have a position, either long or short
     """
+
     def __init__(self, broker: '_Broker'):
         self.__broker = broker
 
@@ -374,6 +377,7 @@ class Order:
     [filled]: https://www.investopedia.com/terms/f/fill.asp
     [Good 'Til Canceled]: https://www.investopedia.com/terms/g/gtc.asp
     """
+
     def __init__(self, broker: '_Broker',
                  size: float,
                  limit_price: float = None,
@@ -509,6 +513,7 @@ class Trade:
     When an `Order` is filled, it results in an active `Trade`.
     Find active trades in `Strategy.trades` and closed, settled trades in `Strategy.closed_trades`.
     """
+
     def __init__(self, broker: '_Broker', size: int, entry_price: float, entry_bar):
         self.__broker = broker
         self.__size = size
@@ -671,6 +676,9 @@ class _Broker:
             ("commission should be between -10% "
              f"(e.g. market-maker's rebates) and 10% (fees), is {commission}")
         assert 0 < margin <= 1, f"margin should be between 0 and 1, is {margin}"
+
+        self.tick_size = self.get_tick_size(data)
+
         self._data: _Data = data
         self._cash = cash
         self._commission = commission
@@ -793,7 +801,7 @@ class _Broker:
             # Check if stop condition was hit
             stop_price = order.stop
             if stop_price:
-                is_stop_hit = ((high > stop_price) if order.is_long else (low < stop_price))
+                is_stop_hit = ((high > stop_price + self.tick_size) if order.is_long else (low < stop_price - self.tick_size))
                 if not is_stop_hit:
                     continue
 
@@ -804,13 +812,13 @@ class _Broker:
             # Determine purchase price.
             # Check if limit order can be filled.
             if order.limit:
-                is_limit_hit = low < order.limit if order.is_long else high > order.limit
+                is_limit_hit = low < order.limit - self.tick_size if order.is_long else high > order.limit + self.tick_size
                 # When stop and limit are hit within the same bar, we pessimistically
                 # assume limit was hit before the stop (i.e. "before it counts")
                 is_limit_hit_before_stop = (is_limit_hit and
-                                            (order.limit < (stop_price or -np.inf)
+                                            (order.limit - self.tick_size < (stop_price or -np.inf)
                                              if order.is_long
-                                             else order.limit > (stop_price or np.inf)))
+                                             else order.limit + self.tick_size > (stop_price or np.inf)))
                 if not is_limit_hit or is_limit_hit_before_stop:
                     continue
 
@@ -971,6 +979,9 @@ class _Broker:
 
 
 class Backtest:
+
+    tick_size = pow(10, -8)
+
     """
     Backtest a particular (parameterized) strategy
     on particular data.
@@ -980,6 +991,7 @@ class Backtest:
     instance, or `backtesting.backtesting.Backtest.optimize` to
     optimize it.
     """
+
     def __init__(self,
                  data: pd.DataFrame,
                  strategy: Type[Strategy],
@@ -1047,6 +1059,8 @@ class Backtest:
 
         data = data.copy(deep=False)
 
+        self.tick_size =
+
         # Convert index to datetime index
         if (not isinstance(data.index, pd.DatetimeIndex) and
             not isinstance(data.index, pd.RangeIndex) and
@@ -1092,6 +1106,13 @@ class Backtest:
         )
         self._strategy = strategy
         self._results: Optional[pd.Series] = None
+
+    def get_tick_size(self, data):
+        price = data.Close
+        ticks = [(int(str(close).split('e-')[1]) + 1 if 'e-' in str(close)
+                  else int(str(close).split('.')[1])) for close in price]
+        tick_exponent = max(ticks)
+        return pow(10, -tick_exponent)
 
     def run(self, **kwargs) -> pd.Series:
         """
@@ -1463,7 +1484,7 @@ class Backtest:
                     n_initial_points=min(max_tries, 20 + 3 * len(kwargs)),
                     initial_point_generator='lhs',  # 'sobel' requires n_initial_points ~ 2**N
                     callback=DeltaXStopper(9e-7),
-                    n_jobs = -1,
+                    n_jobs=-1,
                     random_state=random_state)
 
             stats = self.run(**dict(zip(kwargs.keys(), res.x)))
