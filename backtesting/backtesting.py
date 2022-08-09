@@ -669,6 +669,9 @@ class Trade:
 
 
 class _Broker:
+    
+    tick_size = pow(10, -8)
+    
     def __init__(self, *, data, cash, commission, margin,
                  trade_on_close, hedging, exclusive_orders, index):
         assert 0 < cash, f"cash should be >0, is {cash}"
@@ -692,6 +695,13 @@ class _Broker:
         self.trades: List[Trade] = []
         self.position = Position(self)
         self.closed_trades: List[Trade] = []
+
+    def get_tick_size(self, data):
+        price = data.Close
+        ticks = [(int(str(close).split('e-')[1]) + 1 if 'e-' in str(close)
+                  else int(str(close).split('.')[1])) for close in price]
+        tick_exponent = max(ticks)
+        return pow(10, -tick_exponent)
 
     def __repr__(self):
         return f'<Broker: {self._cash:.0f}{self.position.pl:+.1f} ({len(self.trades)} trades)>'
@@ -980,7 +990,6 @@ class _Broker:
 
 class Backtest:
 
-    tick_size = pow(10, -8)
 
     """
     Backtest a particular (parameterized) strategy
@@ -1059,8 +1068,6 @@ class Backtest:
 
         data = data.copy(deep=False)
 
-        self.tick_size =
-
         # Convert index to datetime index
         if (not isinstance(data.index, pd.DatetimeIndex) and
             not isinstance(data.index, pd.RangeIndex) and
@@ -1106,13 +1113,6 @@ class Backtest:
         )
         self._strategy = strategy
         self._results: Optional[pd.Series] = None
-
-    def get_tick_size(self, data):
-        price = data.Close
-        ticks = [(int(str(close).split('e-')[1]) + 1 if 'e-' in str(close)
-                  else int(str(close).split('.')[1])) for close in price]
-        tick_exponent = max(ticks)
-        return pow(10, -tick_exponent)
 
     def run(self, **kwargs) -> pd.Series:
         """
