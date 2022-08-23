@@ -669,9 +669,9 @@ class Trade:
 
 
 class _Broker:
-    
+
     tick_size = pow(10, -8)
-    
+
     def __init__(self, *, data, cash, commission, margin,
                  trade_on_close, hedging, exclusive_orders, index):
         assert 0 < cash, f"cash should be >0, is {cash}"
@@ -698,7 +698,7 @@ class _Broker:
 
     def get_tick_size(self, data):
         price = data.Close
-        ticks = [(int(str(close).split('e-')[1]) + 1 if 'e-' in str(close)
+        ticks = [(int(str(close).split('e-')[1]) + len(str(close).split('.')[1].split('e-')[0]) if 'e-' in str(close)
                   else int(str(close).split('.')[1])) for close in price]
         tick_exponent = max(ticks)
         return pow(10, -tick_exponent)
@@ -811,7 +811,8 @@ class _Broker:
             # Check if stop condition was hit
             stop_price = order.stop
             if stop_price:
-                is_stop_hit = ((high > stop_price + self.tick_size) if order.is_long else (low < stop_price - self.tick_size))
+                is_stop_hit = ((high > stop_price + self.tick_size)
+                               if order.is_long else (low < stop_price - self.tick_size))
                 if not is_stop_hit:
                     continue
 
@@ -989,7 +990,6 @@ class _Broker:
 
 
 class Backtest:
-
 
     """
     Backtest a particular (parameterized) strategy
