@@ -9,6 +9,7 @@ import multiprocessing as mp
 import os
 import sys
 import warnings
+from decimal import Decimal
 from abc import abstractmethod, ABCMeta
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from copy import copy
@@ -698,8 +699,7 @@ class _Broker:
 
     def get_tick_size(self, data):
         price = data.Close
-        ticks = [(int(str(close).split('e-')[1]) + len(str(close).split('.')[1].split('e-')[0]) if 'e-' in str(close)
-                  else int(str(close).split('.')[1])) for close in price]
+        ticks = [len(str(Decimal(str(close))).split('.')[1]) for close in price]
         tick_exponent = max(ticks)
         return pow(10, -tick_exponent)
 
